@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.5...3.14)
+cmake_minimum_required(VERSION 3.14)
 
 get_filename_component(PROJECT_NAME "${CMAKE_CURRENT_SOURCE_DIR}" NAME)
 project(${PROJECT_NAME} LANGUAGES C)
@@ -14,29 +14,41 @@ option(ENABLE_TESTS "Build test binaries" ON)
 # -------------------------------------------------
 # Version from CHANGELOG
 # -------------------------------------------------
-execute_process(
-  COMMAND bash -c
-    "sed -n 's/^## \\[\\(.*\\)\\] - \\(.*\\)/\\1;\\2/p' CHANGELOG | head -n 1"
-  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-  OUTPUT_VARIABLE VERSION_LINE
-  OUTPUT_STRIP_TRAILING_WHITESPACE
+file(STRINGS "${CMAKE_SOURCE_DIR}/CHANGELOG.md"
+     CHANGELOG_LINES
+     REGEX "^## \\[")
+
+list(GET CHANGELOG_LINES 0 FIRST_LINE)
+
+# extract version
+string(REGEX REPLACE
+  "^## \\[(.*)\\].*"
+  "\\1"
+  PROJECT_VERSION
+  "${FIRST_LINE}"
 )
 
-string(REPLACE ";" ";" VERSION_PARTS "${VERSION_LINE}")
-list(GET VERSION_PARTS 0 PROJECT_VERSION)
-list(GET VERSION_PARTS 1 PROJECT_RELEASE_DATE)
+# extract release date
+string(REGEX REPLACE
+  "^## \\[.*\\] - (.*)"
+  "\\1"
+  PROJECT_RELEASE_DATE
+  "${FIRST_LINE}"
+)
 
-add_compile_definitions(VERSION="${PROJECT_VERSION}")
-
-message(STATUS "Version: ${PROJECT_VERSION}")
-message(STATUS "Release date: ${PROJECT_RELEASE_DATE}")
+message(STATUS "[${PROJECT_NAME}] Version      : ${PROJECT_VERSION}")
+message(STATUS "[${PROJECT_NAME}] Release Date : ${PROJECT_RELEASE_DATE}")
 
 # -------------------------------------------------
 # Sources
 # -------------------------------------------------
 file(GLOB SOURCES "*.c")
 list(REMOVE_ITEM SOURCES "${PROJECT_SOURCE_DIR}/main.c")
+list(REMOVE_ITEM SOURCES "${PROJECT_SOURCE_DIR}/test.c")
 file(GLOB INCLUDES "*.h")
+
+message(STATUS "[${PROJECT_NAME}] List of source files : ${SOURCES}")
+message(STATUS "[${PROJECT_NAME}] List of include files: ${INCLUDES}")
 
 # -------------------------------------------------
 # Library
@@ -120,9 +132,9 @@ endif()
 # Detect correct Jansson target
 # -------------------------------------------------
 
-get_target_property(JANSSON_INC ${JANSSON_TARGET} INTERFACE_INCLUDE_DIRECTORIES)
-message(STATUS "Jansson include dirs: ${JANSSON_INC}")
-message(STATUS "Jansson include dirs: ${JANSSON_TARGET}")
+# get_target_property(JANSSON_INC ${JANSSON_TARGET} INTERFACE_INCLUDE_DIRECTORIES)
+# message(STATUS "Jansson include dirs: ${JANSSON_INC}")
+# message(STATUS "Jansson include dirs: ${JANSSON_TARGET}")
 
 # -------------------------------------------------
 # Executable
@@ -136,8 +148,6 @@ target_link_libraries(main
     ${ARGTABLE3_TARGET}
     ${LIBNAME}
 )
-
-
 set_property(TARGET main PROPERTY OUTPUT_NAME ${PROJECT_NAME})
 
 # -------------------------------------------------
@@ -155,8 +165,9 @@ endif()
 # -------------------------------------------------
 # Install
 # -------------------------------------------------
-install(TARGETS ${LIBNAME} ARCHIVE DESTINATION lib)
-install(FILES ${INCLUDES} DESTINATION include)
+install(TARGETS main CONFIGURATIONS RELEASE RUNTIME DESTINATION bin)
+install(TARGETS ${LIBNAME} CONFIGURATIONS RELEASE ARCHIVE DESTINATION lib)
+install(FILES ${INCLUDES} CONFIGURATIONS RELEASE DESTINATION include)
 
 # -------------------------------------------------
 # Package
