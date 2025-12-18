@@ -1,0 +1,177 @@
+cmake_minimum_required(VERSION 3.14)
+
+get_filename_component(PROJECT_NAME "${CMAKE_CURRENT_SOURCE_DIR}" NAME)
+project(${PROJECT_NAME} LANGUAGES C)
+
+# -------------------------------------------------
+# Project definitions
+# -------------------------------------------------
+add_compile_definitions(FUNCTION="${PROJECT_NAME}")
+
+option(BUILD_SHARED_LIBS "Build using shared libraries" OFF)
+option(ENABLE_TESTS "Build test binaries" ON)
+
+# -------------------------------------------------
+# Version from CHANGELOG
+# -------------------------------------------------
+file(STRINGS "${CMAKE_SOURCE_DIR}/CHANGELOG.md"
+     CHANGELOG_LINES
+     REGEX "^## \\[")
+
+list(GET CHANGELOG_LINES 0 FIRST_LINE)
+
+# extract version
+string(REGEX REPLACE
+  "^## \\[(.*)\\].*"
+  "\\1"
+  PROJECT_VERSION
+  "${FIRST_LINE}"
+)
+
+# extract release date
+string(REGEX REPLACE
+  "^## \\[.*\\] - (.*)"
+  "\\1"
+  PROJECT_RELEASE_DATE
+  "${FIRST_LINE}"
+)
+
+message(STATUS "[${PROJECT_NAME}] Version      : ${PROJECT_VERSION}")
+message(STATUS "[${PROJECT_NAME}] Release Date : ${PROJECT_RELEASE_DATE}")
+
+# -------------------------------------------------
+# Sources
+# -------------------------------------------------
+file(GLOB SOURCES "*.c")
+list(REMOVE_ITEM SOURCES "${PROJECT_SOURCE_DIR}/main.c")
+list(REMOVE_ITEM SOURCES "${PROJECT_SOURCE_DIR}/test.c")
+file(GLOB INCLUDES "*.h")
+
+message(STATUS "[${PROJECT_NAME}] List of source files : ${SOURCES}")
+message(STATUS "[${PROJECT_NAME}] List of include files: ${INCLUDES}")
+
+# -------------------------------------------------
+# Library
+# -------------------------------------------------
+if(WIN32)
+  set(LIBNAME lib${PROJECT_NAME})
+else()
+  set(LIBNAME ${PROJECT_NAME})
+endif()
+
+add_library(${LIBNAME} STATIC ${SOURCES})
+
+target_include_directories(${LIBNAME}
+  PUBLIC
+    $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}>
+    $<INSTALL_INTERFACE:include>
+)
+
+# -------------------------------------------------
+# FetchContent: Jansson
+# -------------------------------------------------
+include(FetchContent)
+
+set(JANSSON_VERSION 2.14.1)
+
+set(JANSSON_BUILD_DOCS OFF CACHE BOOL "" FORCE)
+set(JANSSON_BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+set(JANSSON_WITHOUT_TESTS ON CACHE BOOL "" FORCE)
+
+FetchContent_Declare(
+  jansson
+  URL https://github.com/akheron/jansson/releases/download/v${JANSSON_VERSION}/jansson-${JANSSON_VERSION}.tar.gz
+  DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+  TLS_VERIFY FALSE
+)
+
+FetchContent_MakeAvailable(jansson)
+if(TARGET jansson::jansson)
+  set(JANSSON_TARGET jansson::jansson)
+elseif(TARGET jansson)
+  set(JANSSON_TARGET jansson)
+elseif(TARGET jansson_static)
+  set(JANSSON_TARGET jansson_static)
+else()
+  message(FATAL_ERROR "Jansson target not found")
+endif()
+
+# -------------------------------------------------
+# FetchContent: Argtable3
+# -------------------------------------------------
+include(FetchContent)
+
+
+
+set(ARGTABLE3_VERSION "v3.3.0.116da6c")
+
+set(ARGTABLE3_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+set(ARGTABLE3_ENABLE_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(ARGTABLE3_ENABLE_TESTS OFF CACHE BOOL "" FORCE)
+
+FetchContent_Declare(
+  argtable3
+  URL https://github.com/argtable/argtable3/releases/download/${ARGTABLE3_VERSION}/argtable-${ARGTABLE3_VERSION}.tar.gz
+  DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+  TLS_VERIFY FALSE
+)
+
+FetchContent_MakeAvailable(argtable3)
+if(TARGET argtable3::argtable3)
+  set(ARGTABLE3_TARGET argtable3::argtable3)
+elseif(TARGET argtable3)
+  set(ARGTABLE3_TARGET argtable3)
+elseif(TARGET argtable3_static)
+  set(ARGTABLE3_TARGET argtable3_static)
+else()
+  message(FATAL_ERROR "Argtable3 target not found")
+endif()
+
+
+# -------------------------------------------------
+# Detect correct Jansson target
+# -------------------------------------------------
+
+# get_target_property(JANSSON_INC ${JANSSON_TARGET} INTERFACE_INCLUDE_DIRECTORIES)
+# message(STATUS "Jansson include dirs: ${JANSSON_INC}")
+# message(STATUS "Jansson include dirs: ${JANSSON_TARGET}")
+
+# -------------------------------------------------
+# Executable
+# -------------------------------------------------
+include_directories("build/_deps/jansson-build/include")
+add_executable(main main.c)
+
+target_link_libraries(main
+  PRIVATE
+    ${JANSSON_TARGET}
+    ${ARGTABLE3_TARGET}
+    ${LIBNAME}
+)
+set_property(TARGET main PROPERTY OUTPUT_NAME ${PROJECT_NAME})
+install(TARGETS main CONFIGURATIONS RELEASE RUNTIME DESTINATION bin)
+
+# -------------------------------------------------
+# Tests
+# -------------------------------------------------
+include(CTest)
+
+if(ENABLE_TESTS)
+  add_executable(test1 test.c)
+  target_link_libraries(test1 PRIVATE ${LIBNAME})
+  enable_testing()
+  add_test(NAME test1 COMMAND $<TARGET_FILE:test1>)
+endif()
+
+# -------------------------------------------------
+# Install
+# -------------------------------------------------
+# install(TARGETS ${LIBNAME} CONFIGURATIONS RELEASE ARCHIVE DESTINATION lib)
+# install(FILES ${INCLUDES} CONFIGURATIONS RELEASE DESTINATION include)
+
+# -------------------------------------------------
+# Package
+# -------------------------------------------------
+set(CPACK_PACKAGE_NAME ${PROJECT_NAME})
+set(CPACK_PACKAGE_VERSION ${PROJECT_VERSION})
+include(CPack)

@@ -2,8 +2,9 @@
 
 ## Build
 ```
-cmake -B build
-cmake --build build --config Release
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --buid build
+cmake --install build
 ```
 
 ## Test
@@ -15,12 +16,14 @@ ctest.exe -C Debug
 ```
 
 ## Install
+### Windows
+### Linux 
 ```
-if [[ "$OSTYPE" == "msys" ]] || [[ "$OSTYPE" == "win32" ]]; then
-  cmake.exe -B build -DCMAKE_INSTALL_PREFIX="$LOCALAPPDATA"/SignalRegistry  
-else
-  cmake.exe -B build -DCMAKE_INSTALL_PREFIX=/usr/local/SignalRegistry  
-fi
+cmake -B build -DCMAKE_INSTALL_PREFIX=/usr/local/SignalRegistry  
+cmake --build build --config Release --target INSTALL
+```
+```
+cmake -B build -DCMAKE_INSTALL_PREFIX="$LOCALAPPDATA"/SignalRegistry  
 cmake --build build --config Release --target INSTALL
 
 ```
