@@ -1,0 +1,157 @@
+cmake_minimum_required(VERSION 3.14)
+get_filename_component(PROJECT_NAME "${CMAKE_CURRENT_SOURCE_DIR}" NAME)
+project(${PROJECT_NAME} LANGUAGES C)
+add_definitions(-DFUNCTION="${PROJECT_NAME}")
+OPTION(FOO "Foo Option" OFF)
+
+# version
+# get_filename_component(VERSION_TAG_PATH "VERSION" ABSOLUTE)
+
+# if(EXISTS ${VERSION_TAG_PATH})
+#   file(READ VERSION VERSION_TAG OFFSET 0)
+#   string(REPLACE "." ";" VERSION_LIST ${VERSION_TAG})
+#   list(GET VERSION_LIST 0 PROJECT_VERSION_MAJOR)
+#   list(GET VERSION_LIST 1 PROJECT_VERSION_MINOR)
+#   list(GET VERSION_LIST 2 PROJECT_VERSION_PATCH)
+# else()
+#   set(PROJECT_VERSION_MAJOR 0)
+#   set(PROJECT_VERSION_MINOR 0)
+#   set(PROJECT_VERSION_PATCH 0)
+# endif()
+
+# set(PROJECT_VERSION "${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH}")
+execute_process(
+  COMMAND bash -c
+    "sed -n 's/^## \\[\\(.*\\)\\] - \\(.*\\)/\\1;\\2/p' CHANGELOG | head -n 1"
+  WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+  OUTPUT_VARIABLE VERSION_LINE
+  OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+
+string(REPLACE ";" ";" VERSION_PARTS "${VERSION_LINE}")
+list(GET VERSION_PARTS 0 PROJECT_VERSION)
+list(GET VERSION_PARTS 1 PROJECT_RELEASE_DATE)
+
+message(STATUS "Version: ${PROJECT_VERSION}")
+message(STATUS "Release date: ${PROJECT_RELEASE_DATE}")
+add_definitions(-DVERSION="${PROJECT_VERSION}")
+message(STATUS "[${PROJECT_NAME}] Project version: ${PROJECT_VERSION}")
+
+# option
+option(BUILD_SHARED_LIBS "Build using shared libraries" OFF)
+option(ENABLE_TESTS "Build test binaries" ON)
+
+# source
+file(GLOB SOURCES "*.c")
+list(REMOVE_ITEM SOURCES "${PROJECT_SOURCE_DIR}/main.c")
+file(GLOB INCLUDES "*.h")
+install(FILES ${INCLUDES} DESTINATION include CONFIGURATIONS RELEASE)
+install(FILES ${SOURCES}  DESTINATION src CONFIGURATIONS RELEASE)
+message(STATUS "[${PROJECT_NAME}] List of source files: ${SOURCES}")
+message(STATUS "[${PROJECT_NAME}] List of include files: ${INCLUDES}")
+
+# library
+if(UNIX OR MSYS OR MINGW)
+  set(LIBNAME ${PROJECT_NAME})
+elseif(WIN32)
+  set(LIBNAME lib${PROJECT_NAME})
+endif()
+
+# build
+if(BUILD_SHARED_LIBS)
+  add_library(${LIBNAME} SHARED ${SOURCES})
+
+  if(MSVC)
+    if(BUILD_SHARED_LIBS)
+      add_definitions(-DMSVC_DLL)
+      add_definitions(-DMSVC_DLL_EXPORT)
+      include(GenerateExportHeader)
+      GENERATE_EXPORT_HEADER(${LIBNAME} BASE_NAME ${LIBNAME} STATIC_DEFINE SHARED_EXPORTS_BUILT_AS_STATIC)
+    endif(BUILD_SHARED_LIBS)
+  endif(MSVC)
+  install(TARGETS ${LIBNAME} CONFIGURATIONS RELEASE LIBRARY DESTINATION bin)
+else()
+  add_library(${LIBNAME} STATIC ${SOURCES})
+  install(TARGETS ${LIBNAME} CONFIGURATIONS RELEASE ARCHIVE DESTINATION lib)
+endif(BUILD_SHARED_LIBS)
+
+target_compile_definitions(${LIBNAME} PUBLIC PROJECT_VERSION_MAJOR=${PROJECT_VERSION_MAJOR})
+target_compile_definitions(${LIBNAME} PUBLIC PROJECT_VERSION_MINOR=${PROJECT_VERSION_MINOR})
+target_compile_definitions(${LIBNAME} PUBLIC PROJECT_VERSION_PATCH=${PROJECT_VERSION_PATCH})
+
+include(FetchContent)
+
+set(JANSSON_VERSION 2.14.1)
+
+FetchContent_Declare(
+    jansson
+    URL https://github.com/akheron/jansson/releases/download/v${JANSSON_VERSION}/jansson-${JANSSON_VERSION}.tar.gz
+    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+    TLS_VERIFY FALSE
+)
+
+# Jansson CMake seçenekleri (indirILMEDEN ÖNCE)
+set(JANSSON_BUILD_DOCS OFF CACHE BOOL "" FORCE)
+set(JANSSON_BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+set(JANSSON_WITHOUT_TESTS ON CACHE BOOL "" FORCE)
+
+FetchContent_MakeAvailable(jansson)
+if(TARGET jansson::jansson)
+  set(JANSSON_TARGET jansson::jansson)
+elseif(TARGET jansson)
+  set(JANSSON_TARGET jansson)
+elseif(TARGET jansson_static)
+  set(JANSSON_TARGET jansson_static)
+endif()
+get_target_property(JANSSON_INC ${JANSSON_TARGET} INTERFACE_INCLUDE_DIRECTORIES)
+message(STATUS "Jansson include dirs: ${JANSSON_INC}")
+
+
+include_directories("dependencies")
+
+if(UNIX OR MSYS OR MINGW)
+  link_directories("dependencies/argtable/build/src")
+  # link_directories("dependencies/jansson/build/lib")
+elseif(WIN32)
+  link_directories("dependencies/argtable/build/src/Release")
+  # link_directories("dependencies/jansson/build/lib/Release")
+endif()
+
+# cli executable
+set(COMMON_LIBS "argtable3")
+add_executable(main main.c)
+target_link_libraries(main PRIVATE ${JANSSON_TARGET} ${LIBNAME} argtable3)
+
+# target_link_libraries(main PRIVATE jansson ${LIBNAME} PUBLIC "argtable3")
+set_property(TARGET main PROPERTY OUTPUT_NAME ${PROJECT_NAME})
+install(TARGETS main CONFIGURATIONS RELEASE RUNTIME DESTINATION bin)
+
+# test
+include(CTest)
+if(ENABLE_TESTS)
+  # testing binary
+  add_executable(test1 test.c)
+  target_link_libraries(test1 PRIVATE "${LIBNAME}")
+
+  # enable testing functionality
+  enable_testing()
+
+  # define tests
+  add_test(NAME test1 COMMAND $<TARGET_FILE:test1>)
+endif(ENABLE_TESTS)
+
+# pack
+set(CPACK_PACKAGE_NAME ${PROJECT_NAME})
+set(CPACK_PACKAGE_VERSION ${PROJECT_VERSION})
+
+if(UNIX OR MSYS OR MINGW)
+elseif(WIN32)
+  # set(CMAKE_INSTALL_PREFIX "${LOCALAPPDATA_CMAKE}/AppData/Local/SignalRegistry/${PROJECT_NAME}")
+  # file(TO_CMAKE_PATH "$ENV{LOCALAPPDATA}" LOCALAPPDATA_CMAKE)
+  # message(STATUS "${LOCALAPPDATA_CMAKE}")
+  # set(CPACK_INSTALL_PREFIX "${LOCALAPPDATA_CMAKE}/AppData/Local/SignalRegistry/${PROJECT_NAME}")
+  set(CPACK_NSIS_DEFINES "RequestExecutionLevel user") # Force user-level
+  set(CPACK_NSIS_MODIFY_PATH ON) # add to path
+endif()
+
+include(CPack)
