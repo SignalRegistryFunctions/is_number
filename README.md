@@ -3,7 +3,7 @@
 ## Build
 ```
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --buid build
+cmake --build build --config Release
 cmake --install build
 ```
 

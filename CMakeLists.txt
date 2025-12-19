@@ -18,9 +18,10 @@ add_compile_definitions(FUNCTION="${PROJECT_NAME}")
 option(BUILD_SHARED_LIBS "Build using shared libraries" OFF)
 option(ENABLE_TESTS "Build test binaries" ON)
 if(UNIX OR MSYS OR MINGW)
-  set(CMAKE_INSTALL_PREFIX "install")
+  set(CMAKE_INSTALL_PREFIX "/usr/local/SignalRegistry")
 elseif(WIN32)
-  set(CMAKE_INSTALL_PREFIX $ENV{LocalAppData})
+  file(TO_CMAKE_PATH "$ENV{LOCALAPPDATA}" LOCALAPPDATA_CMAKE)
+  set(CMAKE_INSTALL_PREFIX "${LOCALAPPDATA_CMAKE}/SignalRegistry")
 endif()
 message(STATUS "[${PROJECT_NAME}] CMake prefix path: ${CMAKE_INSTALL_PREFIX}")
 
@@ -86,6 +87,7 @@ FetchContent_Declare(
   jansson
   URL https://github.com/akheron/jansson/releases/download/v${JANSSON_VERSION}/jansson-${JANSSON_VERSION}.tar.gz
   DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+  TLS_VERIFY FALSE
 )
 FetchContent_MakeAvailable(jansson)
 
@@ -104,6 +106,7 @@ FetchContent_Declare(
   argtable3
   URL https://github.com/argtable/argtable3/releases/download/v3.3.0.116da6c/argtable-v3.3.0.116da6c.tar.gz
   DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+  TLS_VERIFY FALSE
 )
 FetchContent_MakeAvailable(argtable3)
 
